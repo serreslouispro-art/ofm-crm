@@ -1,4 +1,4 @@
-const BASE = '/api'
+const BASE = 'http://127.0.0.1:5000'
 
 async function request(path, options = {}) {
   const res = await fetch(BASE + path, {

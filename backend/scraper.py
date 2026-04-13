@@ -214,6 +214,35 @@ class InstagramScraper:
             except Exception:
                 pass
 
+    async def _dismiss_cookie_banner(self, log=None) -> bool:
+        """Ferme la bannière de cookies IG affichée par-dessus n'importe quelle page."""
+        labels = [
+            "Autoriser tous les cookies",
+            "Autoriser les cookies essentiels et facultatifs",
+            "Tout autoriser",
+            "Tout accepter",
+            "Allow all cookies",
+            "Allow essential and optional cookies",
+            "Accept all",
+            "Accept All",
+            "Refuser les cookies optionnels",
+            "Decline optional cookies",
+        ]
+        for label in labels:
+            try:
+                btn = await self.page.wait_for_selector(
+                    f'button:has-text("{label}")', timeout=1500
+                )
+                if btn:
+                    await btn.click()
+                    if log:
+                        log(f"Bannière cookies fermée via '{label}'")
+                    await _delay(1, 2)
+                    return True
+            except PWTimeout:
+                pass
+        return False
+
     async def _handle_consent(self) -> bool:
         """Accepte la page de consentement cookies Instagram si présente."""
         if "consent" not in self.page.url and "cookie" not in self.page.url.lower():
@@ -243,25 +272,43 @@ class InstagramScraper:
             if "consent" in self.page.url or "cookie" in self.page.url.lower():
                 await self._handle_consent()
                 await _delay(1, 2)
-                if "consent" in self.page.url:
-                    await self.page.goto(IG_BASE, wait_until="domcontentloaded", timeout=15000)
-                    await _delay(1.5, 2)
-            return "login" not in self.page.url and "consent" not in self.page.url
+            await self._dismiss_cookie_banner()
+
+            if "login" in self.page.url or "consent" in self.page.url:
+                return False
+
+            # Vérifie la présence d'un élément réservé aux utilisateurs connectés.
+            # Instagram affiche le login wall en modal sans changer l'URL, donc
+            # tester l'URL ne suffit pas.
+            authed_selectors = [
+                f'a[href="/{self.ig_username}/"]',          # lien vers son propre profil
+                'svg[aria-label="Accueil"]',
+                'svg[aria-label="Home"]',
+                'a[href="/direct/inbox/"]',
+                'a[href="/explore/"]',
+            ]
+            for sel in authed_selectors:
+                el = await self.page.query_selector(sel)
+                if el:
+                    return True
+            return False
         except Exception:
             return False
 
     # ------------------------------------------------------------------ login
 
-    async def login(self) -> bool:
+    async def login(self, on_progress: Optional[Callable[[str], None]] = None) -> bool:
         """
         Tente la connexion. Si une session est déjà valide via les cookies,
         passe directement. Gère les popups post-login et les défis 2FA.
         """
+        log = lambda m: (print(f"[login] {m}"), on_progress(f"[login] {m}") if on_progress else None)
+
         if await self._is_logged_in():
-            print("[login] Session valide — déjà connecté.")
+            log(f"Session valide — déjà connecté en tant que @{self.ig_username}.")
             return True
 
-        print("[login] Connexion en cours...")
+        log(f"Connexion à Instagram avec @{self.ig_username}...")
         await self.page.goto(f"{IG_BASE}/accounts/login/", wait_until="domcontentloaded")
         await _delay(2, 3.5)
 
@@ -279,18 +326,115 @@ class InstagramScraper:
             except PWTimeout:
                 pass
 
-        # Remplir le formulaire
-        try:
-            await self.page.wait_for_selector('input[name="username"]', timeout=10000)
-        except PWTimeout:
-            print("[login] Formulaire de connexion introuvable.")
+        # Dégager une éventuelle bannière cookies sur la page de login
+        await self._dismiss_cookie_banner(log)
+
+        # Trouver le champ username (Instagram varie les sélecteurs)
+        username_selectors = [
+            'input[name="username"]',
+            'input[aria-label="Phone number, username, or email"]',
+            'input[aria-label="Téléphone, nom d’utilisateur ou adresse e-mail"]',
+            'input[aria-label*="username" i]',
+            'input[aria-label*="utilisateur" i]',
+            'input[autocomplete="username"]',
+            'input[type="text"]',
+        ]
+        password_selectors = [
+            'input[name="password"]',
+            'input[aria-label="Password"]',
+            'input[aria-label="Mot de passe"]',
+            'input[autocomplete="current-password"]',
+            'input[type="password"]',
+        ]
+
+        username_field = None
+        for sel in username_selectors:
+            try:
+                username_field = await self.page.wait_for_selector(sel, timeout=3000)
+                if username_field:
+                    log(f"Champ username trouvé via : {sel}")
+                    break
+            except PWTimeout:
+                pass
+
+        if not username_field:
+            log("Formulaire de connexion introuvable. Capture pour debug...")
+            try:
+                debug_dir = Path(__file__).parent / "debug"
+                debug_dir.mkdir(exist_ok=True)
+                shot = debug_dir / "login_fail.png"
+                html = debug_dir / "login_fail.html"
+                await self.page.screenshot(path=str(shot), full_page=True)
+                html.write_text(await self.page.content(), encoding="utf-8")
+                log(f"Screenshot : {shot}")
+                log(f"HTML       : {html}")
+                log(f"URL actuelle : {self.page.url}")
+            except Exception as e:
+                log(f"Échec capture debug : {e}")
             return False
 
-        await self.page.fill('input[name="username"]', self.ig_username)
+        password_field = None
+        for sel in password_selectors:
+            el = await self.page.query_selector(sel)
+            if el:
+                password_field = el
+                log(f"Champ password trouvé via : {sel}")
+                break
+
+        if not password_field:
+            log("Champ password introuvable.")
+            return False
+
+        log(f"Saisie du username @{self.ig_username}...")
+        await username_field.click()
+        await username_field.fill(self.ig_username)
         await _delay(0.4, 0.9)
-        await self.page.fill('input[name="password"]', self.ig_password)
+        log("Saisie du mot de passe...")
+        await password_field.click()
+        await password_field.fill(self.ig_password)
         await _delay(0.6, 1.2)
-        await self.page.click('button[type="submit"]')
+        log("Soumission du formulaire...")
+        # Bouton submit : essayer plusieurs variantes
+        for sel in [
+            'button[type="submit"]',
+            'button:has-text("Log in")',
+            'button:has-text("Se connecter")',
+            'button:has-text("Connexion")',
+        ]:
+            btn = await self.page.query_selector(sel)
+            if btn:
+                await btn.click()
+                break
+        else:
+            await password_field.press("Enter")
+
+        # Laisser Instagram réagir (5s) puis capturer l'état pour debug
+        await _delay(5, 6)
+        try:
+            debug_dir = Path(__file__).parent / "debug"
+            debug_dir.mkdir(exist_ok=True)
+            shot = debug_dir / "login_after_submit.png"
+            html = debug_dir / "login_after_submit.html"
+            await self.page.screenshot(path=str(shot), full_page=True)
+            html.write_text(await self.page.content(), encoding="utf-8")
+            log(f"Capture post-submit : {shot}")
+            log(f"URL post-submit     : {self.page.url}")
+
+            # Chercher un message d'erreur visible
+            for sel in [
+                'div[role="alert"]',
+                'p[data-testid="login-error-message"]',
+                'div#slfErrorAlert',
+                'p[id^="error"]',
+            ]:
+                el = await self.page.query_selector(sel)
+                if el:
+                    txt = (await el.text_content() or "").strip()
+                    if txt:
+                        log(f"Message Instagram : {txt}")
+                        break
+        except Exception as e:
+            log(f"Échec capture post-submit : {e}")
 
         # Attendre la redirection ou une erreur
         try:
@@ -299,7 +443,7 @@ class InstagramScraper:
                 timeout=20000,
             )
         except PWTimeout:
-            print("[login] Timeout après la soumission — identifiants incorrects ?")
+            log("Timeout après la soumission — identifiants incorrects ou captcha ?")
             return False
 
         await _delay(2, 3)
@@ -450,37 +594,61 @@ class InstagramScraper:
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> list[str]:
         """
-        Ouvre le profil de `target`, clique sur le compteur d'abonnés,
+        Ouvre le profil de `target`, clique sur le compteur d'abonnements,
         scrolle la modale et retourne jusqu'à `limit` usernames.
         """
-        log = lambda msg: print(f"[followers] {msg}") or (on_progress(msg) if on_progress else None)
+        log = lambda msg: print(f"[following] {msg}") or (on_progress(msg) if on_progress else None)
 
         log(f"Chargement du profil @{target}...")
         await self.page.goto(f"{IG_BASE}/{target}/", wait_until="domcontentloaded")
         await _delay(2, 3.5)
+        await self._dismiss_cookie_banner(log)
 
         # Vérifier que le compte est public et accessible
         private_msg = await self.page.query_selector('h2:has-text("This Account is Private")')
         if private_msg:
-            log("Ce compte est privé — impossible d'accéder aux abonnés.")
+            log("Ce compte est privé — impossible d'accéder aux abonnements.")
             return []
 
-        # Cliquer sur le lien "X followers"
+        # Cliquer sur le lien "X following / abonnements"
         clicked = False
-        for sel in [
-            f'a[href="/{target}/followers/"]',
-            f'a[href="/{target}/followers"] ',
-        ]:
+        selectors = [
+            f'a[href="/{target}/following/"]',
+            f'a[href="/{target}/following"]',
+            f'a[href$="/{target}/following/"]',
+            f'a[href*="/following"]',
+            'a:has-text("following")',
+            'a:has-text("abonnements")',
+            'a:has-text("Following")',
+            'a:has-text("Abonnements")',
+            'a:has-text("suivis")',
+            'a:has-text("Suivi(e)s")',
+        ]
+        for sel in selectors:
             try:
-                el = await self.page.wait_for_selector(sel, timeout=8000)
-                await el.click()
-                clicked = True
-                break
+                el = await self.page.wait_for_selector(sel, timeout=4000)
+                if el:
+                    await el.click()
+                    clicked = True
+                    log(f"Clic réussi via le sélecteur : {sel}")
+                    break
             except PWTimeout:
                 pass
 
         if not clicked:
-            log("Lien 'followers' introuvable. Le compte est peut-être privé ou introuvable.")
+            log("Lien 'following' introuvable. Capture de la page pour debug...")
+            try:
+                debug_dir = Path(__file__).parent / "debug"
+                debug_dir.mkdir(exist_ok=True)
+                shot_path = debug_dir / f"no_following_{target}.png"
+                html_path = debug_dir / f"no_following_{target}.html"
+                await self.page.screenshot(path=str(shot_path), full_page=True)
+                html_path.write_text(await self.page.content(), encoding="utf-8")
+                log(f"Screenshot : {shot_path}")
+                log(f"HTML       : {html_path}")
+                log(f"URL actuelle : {self.page.url}")
+            except Exception as e:
+                log(f"Échec capture debug : {e}")
             return []
 
         await _delay(2, 3)
@@ -655,7 +823,7 @@ async def scrape(
         password=credentials["password"],
         headless=headless,
     ) as scraper:
-        if not await scraper.login():
+        if not await scraper.login(on_progress=on_progress):
             raise RuntimeError(
                 "Connexion Instagram impossible. Vérifiez vos identifiants."
             )

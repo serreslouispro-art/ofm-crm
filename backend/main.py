@@ -7,6 +7,7 @@ import asyncio
 import threading
 
 from flask import Flask, request, jsonify, abort
+from flask_cors import CORS
 from database import get_connection, init_db
 import crud
 from scraper import scrape as run_scrape, ScraperFilters
@@ -14,6 +15,7 @@ from sender import send_campaign, DEFAULT_TEMPLATES
 from inbox_listener import start_listener, stop_listener, get_status as get_listener_status
 
 app = Flask(__name__)
+CORS(app)
 
 
 # ---------------------------------------------------------------------------
@@ -184,13 +186,26 @@ def scrape_status():
     })
 
 
-@app.post("/scrape/start")
+@app.route("/scrape/start", methods=["GET", "POST"])
 def scrape_start():
+    if request.method == "GET":
+        return jsonify({
+            "info": "Utilisez POST pour démarrer un scraping",
+            "running": _scrape_state["running"],
+        })
+
     if _scrape_state["running"]:
         abort(409, "Un scraping est déjà en cours")
 
     data        = request.get_json(force=True)
     account_id  = data.get("account_id")
+    if account_id not in (None, "", 0):
+        try:
+            account_id = int(account_id)
+        except (TypeError, ValueError):
+            abort(400, f"account_id invalide : {account_id!r}")
+    else:
+        account_id = None
     target      = (data.get("target") or "").strip().lstrip("@")
     limit       = int(data.get("limit", 100))
     headless    = bool(data.get("headless", False))
@@ -270,6 +285,10 @@ def _get_account_credentials(account_id):
     if not comptes:
         return None
     if account_id:
+        try:
+            account_id = int(account_id)
+        except (TypeError, ValueError):
+            return None
         c = next((c for c in comptes if c["id"] == account_id), None)
     else:
         c = comptes[0]
@@ -396,4 +415,10 @@ def inbox_stop():
 
 if __name__ == "__main__":
     init_db()
+    print("=" * 60)
+    print("ROUTES ENREGISTRÉES :")
+    for rule in sorted(app.url_map.iter_rules(), key=lambda r: str(r)):
+        methods = ",".join(sorted(m for m in rule.methods if m not in {"HEAD", "OPTIONS"}))
+        print(f"  [{methods:20}] {rule}")
+    print("=" * 60)
     app.run(debug=True, port=5000)
