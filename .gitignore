@@ -1,0 +1,42 @@
+# Sessions Instagram (cookies / tokens sensibles — ne jamais versionner)
+backend/ig_session.json
+backend/ig_instagrapi_session.json
+
+# Logs
+backend/*.log
+*.log
+
+# Base de données SQLite locale
+backend/*.db
+backend/*.sqlite
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+
+# Environnement
+.env
+.env.*
+*.env
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# Claude local settings
+.claude/settings.local.json
