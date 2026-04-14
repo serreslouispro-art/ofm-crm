@@ -442,7 +442,7 @@ class InstagramSender:
                 self.cl.direct_send_seen(user_id)  # marquer comme vu
             except Exception:
                 pass
-            await asyncio.sleep(typing_delay)
+            time.sleep(typing_delay)
 
             log.debug(f"  [send_dm] Appel direct_send(user_ids=[{user_id}])…")
             thread = self.cl.direct_send(message, user_ids=[user_id])

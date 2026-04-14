@@ -44,3 +44,8 @@ export const stopInboxListener  = ()   => request('/inbox/stop',  { method: 'POS
 
 export const startCampaignAuto = (data) => request('/campaign/auto', { method: 'POST', body: JSON.stringify(data) })
 export const stopCampaign = () => request('/campaign/stop', { method: 'POST', body: '{}' })
+
+export const getTemplates    = ()      => request('/templates')
+export const createTemplate  = (data)  => request('/templates', { method: 'POST', body: JSON.stringify(data) })
+export const updateTemplate  = (id, d) => request(`/templates/${id}`, { method: 'PATCH', body: JSON.stringify(d) })
+export const deleteTemplate  = (id)    => request(`/templates/${id}`, { method: 'DELETE' })

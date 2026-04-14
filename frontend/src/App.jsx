@@ -5,6 +5,7 @@ import Prospection from './pages/Prospection'
 import Pipeline from './pages/Pipeline'
 import Inbox from './pages/Inbox'
 import Comptes from './pages/Comptes'
+import Templates from './pages/Templates'
 
 export default function App() {
   return (
