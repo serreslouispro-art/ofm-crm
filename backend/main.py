@@ -404,7 +404,7 @@ def campaign_auto():
         abort(409, "Une campagne ou un scraping est déjà en cours")
 
     data       = request.get_json(force=True)
-    account_id = int(data.get("account_id"))
+    account_id = int(data.get("account_id") or data.get("compte_id") or 0)
     target     = (data.get("target") or "").strip().lstrip("@")
     limit        = int(data.get("limit",        50))
     scrape_limit = int(data.get("scrape_limit", 200))
