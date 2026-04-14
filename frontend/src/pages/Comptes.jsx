@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getComptes, addCompte, toggleCompte, deleteCompte, getModeles } from '../api'
-import { Plus, Trash2, Power, Instagram, Eye, EyeOff, ShieldAlert } from 'lucide-react'
+import { getComptes, addCompte, toggleCompte, deleteCompte, getModeles, startCampaignAuto, getCampaignStatus, stopCampaign } from '../api'
+import { Plus, Trash2, Power, Instagram, Eye, EyeOff, ShieldAlert, Zap, Loader } from 'lucide-react'
 
 function fmtDate(dt) {
   if (!dt) return '—'
@@ -225,7 +225,29 @@ export default function Comptes() {
   const [modeles,   setModeles]   = useState([])
   const [loading,   setLoading]   = useState(true)
   const [showAdd,   setShowAdd]   = useState(false)
-  const [confirmId, setConfirmId] = useState(null)   // id du compte à supprimer
+  const [confirmId, setConfirmId] = useState(null)
+  const [cibles,    setCibles]    = useState({})
+  const [autoState, setAutoState] = useState({})
+  const [delais,    setDelais]    = useState({})  // { compteId: minutes }
+
+  async function handleAuto(compteId) {
+    const target = (cibles[compteId] || '').trim().replace('@', '')
+    if (!target) { alert('Renseigne un compte cible'); return }
+    setAutoState(prev => ({ ...prev, [compteId]: { running: true, log: [], result: null } }))
+    try {
+      const delai = delais[compteId] || 45
+      await startCampaignAuto({ account_id: compteId, target, limit: 3, dms_per_day: 3, delay_session_min: delai, delay_session_max: delai + 15 })
+      const poll = async () => {
+        const s = await getCampaignStatus()
+        setAutoState(prev => ({ ...prev, [compteId]: { ...prev[compteId], running: s.running, log: s.log || [] } }))
+        if (s.running) setTimeout(poll, 2500)
+        else setAutoState(prev => ({ ...prev, [compteId]: { running: false, log: s.log || [], result: s.result } }))
+      }
+      poll()
+    } catch(e) {
+      setAutoState(prev => ({ ...prev, [compteId]: { running: false, log: [], result: { error: e.message } } }))
+    }
+  }
 
   async function load() {
     const [c, m] = await Promise.all([getComptes(), getModeles()])
@@ -377,6 +399,43 @@ export default function Comptes() {
                   </p>
                 </div>
 
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: '#444466' }}>@</span>
+                    <input
+                      value={cibles[compte.id] || ''}
+                      onChange={e => setCibles(prev => ({ ...prev, [compte.id]: e.target.value }))}
+                      placeholder="compte a scraper"
+                      style={{ width: '100%', padding: '7px 10px 7px 22px', borderRadius: 8, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleAuto(compte.id)}
+                    disabled={autoState[compte.id]?.running}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: 'none', background: autoState[compte.id]?.running ? '#1a1a2e' : 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: 'white', fontSize: 11, fontWeight: 600, cursor: autoState[compte.id]?.running ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    {autoState[compte.id]?.running
+                      ? <><Loader size={11} style={{ display: 'inline-block' }} /> En cours…</>
+                      : <><Zap size={11} /> Lancer auto</>}
+                  </button>
+                  {autoState[compte.id]?.running && (
+                    <button
+                      onClick={async () => { await stopCampaign(); setAutoState(prev => ({ ...prev, [compte.id]: { running: false, log: [], result: null } })) }}
+                      style={{ padding: '7px 10px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.15)', color: '#ef4444', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      ✕ Stop
+                    </button>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 140 }}>
+                    <span style={{ fontSize: 10, color: '#444466', whiteSpace: 'nowrap' }}>⏱ {delais[compte.id] || 45}min</span>
+                    <input
+                      type="range" min={1} max={90} step={1}
+                      value={delais[compte.id] || 45}
+                      onChange={e => setDelais(prev => ({ ...prev, [compte.id]: parseInt(e.target.value) }))}
+                      style={{ width: 80, accentColor: '#7c3aed' }}
+                    />
+                  </div>
+                </div>
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
@@ -438,4 +497,7 @@ export default function Comptes() {
       )}
     </div>
   )
+
+
+
 }

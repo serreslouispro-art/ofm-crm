@@ -62,8 +62,15 @@ IG_COOKIES_FILE = Path(__file__).parent / "ig_session.json"
 # Configuration
 # ---------------------------------------------------------------------------
 
-SESSION_FILE = Path(__file__).parent / "ig_instagrapi_session.json"
-LOG_FILE     = Path(__file__).parent / "sender.log"
+# SESSION_FILE est maintenant par compte : ig_instagrapi_session_{username}.json
+# L'ancien fichier partagé est conservé en fallback de compatibilité.
+SESSION_FILE_LEGACY = Path(__file__).parent / "ig_instagrapi_session.json"
+LOG_FILE            = Path(__file__).parent / "sender.log"
+
+
+def _session_file(username: str) -> Path:
+    """Retourne le chemin du fichier de session instagrapi pour un compte donné."""
+    return Path(__file__).parent / f"ig_instagrapi_session_{username}.json"
 
 DMS_PER_DAY       = 50
 N_SESSIONS        = 4
@@ -237,49 +244,105 @@ class InstagramSender:
 
     def login(self) -> bool:
         """
-        Connexion sans chiffrement de mot de passe (compatible Python 3.14).
+        Connexion instagrapi pour self.username.
 
         Stratégie (dans l'ordre) :
-        1. sessionid extrait de ig_session.json  (cookies Playwright)
-        2. sessionid sauvegardé dans ig_instagrapi_session.json
-        3. Échec explicite → relancer save_session.py
+        1. Session instagrapi par compte  ig_instagrapi_session_{username}.json
+        2. Cookies Playwright             ig_session.json  (sessionid uniquement)
+        3. Session legacy partagée        ig_instagrapi_session.json
+        4. Login username + password      (via cl.login — fallback final)
 
-        login(username, password) N'EST PAS utilisé : il déclenche
-        password_publickeys() qui plante quand Instagram bloque l'IP
-        (headers absents → int(None) → TypeError).
+        Chaque étape vérifie que le compte connecté correspond bien à self.username.
+        Si la session appartient à un autre compte, elle est ignorée.
         """
-        # ── 1. Cookies Playwright ──────────────────────────────────────────────
-        session_id = self._sessionid_from_playwright_cookies()
-        if session_id:
-            try:
-                self.cl.login_by_sessionid(session_id)
-                self.cl.dump_settings(SESSION_FILE)   # cache pour la prochaine fois
-                log.info(f"Connecté via ig_session.json — @{self.cl.username}")
-                return True
-            except Exception as e:
-                log.warning(f"login_by_sessionid (Playwright) échoué : {e}")
-                self.cl = Client()
-                self.cl.delay_range = [1, 3]
+        per_account_file = _session_file(self.username)
 
-        # ── 2. Session instagrapi sauvegardée ─────────────────────────────────
-        if SESSION_FILE.exists():
+        # ── 1. Session instagrapi par compte ──────────────────────────────────
+        if per_account_file.exists():
+            log.info(f"[login] Tentative via session par compte : {per_account_file.name}")
             try:
-                self.cl.load_settings(SESSION_FILE)
+                self.cl.load_settings(per_account_file)
                 saved_sid = (self.cl.cookie_dict or {}).get("sessionid") or self.cl.sessionid
                 if saved_sid:
                     self.cl.login_by_sessionid(saved_sid)
-                    log.info(f"Session instagrapi chargée — @{self.cl.username}")
-                    return True
+                    if self.cl.username.lower() == self.username.lower():
+                        log.info(f"[login] Session par compte OK — @{self.cl.username}")
+                        return True
+                    else:
+                        log.warning(
+                            f"[login] Session appartient à @{self.cl.username}, "
+                            f"pas à @{self.username} — ignorée"
+                        )
             except Exception as e:
-                log.warning(f"Session instagrapi invalide : {e}")
-                self.cl = Client()
-                self.cl.delay_range = [1, 3]
+                log.warning(f"[login] Session par compte invalide : {e}")
+            self.cl = Client()
+            self.cl.delay_range = [1, 3]
 
-        # ── 3. Aucune session valide ───────────────────────────────────────────
+        # ── 2. Cookies Playwright ──────────────────────────────────────────────
+        session_id = self._sessionid_from_playwright_cookies()
+        if session_id:
+            log.info("[login] Tentative via ig_session.json (Playwright)…")
+            try:
+                self.cl.login_by_sessionid(session_id)
+                if self.cl.username.lower() == self.username.lower():
+                    self.cl.dump_settings(per_account_file)
+                    log.info(f"[login] Connecté via Playwright — @{self.cl.username} (session sauvegardée)")
+                    return True
+                else:
+                    log.warning(
+                        f"[login] Session Playwright appartient à @{self.cl.username}, "
+                        f"pas à @{self.username} — ignorée"
+                    )
+            except Exception as e:
+                log.warning(f"[login] login_by_sessionid (Playwright) échoué : {e}")
+            self.cl = Client()
+            self.cl.delay_range = [1, 3]
+
+        # ── 3. Session legacy partagée ─────────────────────────────────────────
+        if SESSION_FILE_LEGACY.exists():
+            log.info(f"[login] Tentative via session legacy : {SESSION_FILE_LEGACY.name}")
+            try:
+                self.cl.load_settings(SESSION_FILE_LEGACY)
+                saved_sid = (self.cl.cookie_dict or {}).get("sessionid") or self.cl.sessionid
+                if saved_sid:
+                    self.cl.login_by_sessionid(saved_sid)
+                    if self.cl.username.lower() == self.username.lower():
+                        self.cl.dump_settings(per_account_file)
+                        log.info(f"[login] Session legacy OK — @{self.cl.username} (migrée vers fichier par compte)")
+                        return True
+                    else:
+                        log.warning(
+                            f"[login] Session legacy appartient à @{self.cl.username}, "
+                            f"pas à @{self.username} — ignorée"
+                        )
+            except Exception as e:
+                log.warning(f"[login] Session legacy invalide : {e}")
+            self.cl = Client()
+            self.cl.delay_range = [1, 3]
+
+        # ── 4. Login username + password ───────────────────────────────────────
+        if self.password:
+            log.info(f"[login] Tentative cl.login(@{self.username}) avec mot de passe…")
+            try:
+                self.cl.login(self.username, self.password)
+                self.cl.dump_settings(per_account_file)
+                log.info(f"[login] Login réussi — @{self.cl.username} (session sauvegardée dans {per_account_file.name})")
+                return True
+            except ChallengeRequired as e:
+                log.error(f"[login] Challenge de sécurité Instagram requis (2FA/captcha) — impossible à résoudre automatiquement : {e}")
+                log.error("[login] Ouvre le navigateur manuellement : python3 save_session.py --username " + self.username)
+            except BadPassword as e:
+                log.error(f"[login] Mot de passe incorrect pour @{self.username} : {e}")
+            except Exception as e:
+                log.error(f"[login] cl.login() échoué ({type(e).__name__}) : {e}")
+        else:
+            log.warning(f"[login] Aucun mot de passe disponible pour @{self.username}")
+
+        # ── Échec total ────────────────────────────────────────────────────────
         log.error(
-            "Aucune session Instagram valide. "
+            "[login] Toutes les méthodes de connexion ont échoué pour @%s. "
             "Lance : python3 save_session.py --username %s",
-            self.username,
+            self.username, self.username,
         )
         return False
 
@@ -299,6 +362,22 @@ class InstagramSender:
 
     # ── Envoi d'un DM ─────────────────────────────────────────────────────────
 
+    def check_session(self) -> bool:
+        """Vérifie que la session est toujours active en appelant account_info()."""
+        try:
+            info = self.cl.account_info()
+            log.info(
+                f"[session] Active — @{info.username}  "
+                f"(pk={info.pk}, full_name='{info.full_name}')"
+            )
+            return True
+        except LoginRequired as e:
+            log.error(f"[session] EXPIRÉE — LoginRequired : {e}")
+            return False
+        except Exception as e:
+            log.warning(f"[session] Vérification échouée ({type(e).__name__}) : {e}")
+            return False
+
     def send_dm(self, username: str, message: str) -> bool:
         """
         Envoie un DM à `username`.
@@ -307,22 +386,64 @@ class InstagramSender:
             SuspiciousActivityError  si Instagram bloque l'envoi
         """
         clean = username.lstrip("@")
+        log.debug(f"  [send_dm] Début → @{clean} | message ({len(message)} chars) : '{message[:80]}…'")
 
-        # Récupérer l'ID utilisateur
+        # ── Résolution user_id ─────────────────────────────────────────────────
         try:
             user_id = self.cl.user_id_from_username(clean)
+            log.debug(f"  [send_dm] user_id résolu : @{clean} → {user_id}")
         except UserNotFound:
             log.warning(f"  @{clean} — compte introuvable ou privé")
             return False
         except (RateLimitError, FeedbackRequired) as e:
             raise SuspiciousActivityError(f"Rate-limit / blocage lors de la résolution de @{clean} : {e}")
         except Exception as e:
-            log.warning(f"  @{clean} — impossible de résoudre l'ID : {e}")
+            log.warning(f"  @{clean} — impossible de résoudre l'ID ({type(e).__name__}) : {e}")
             return False
 
-        # Envoyer le message
+        # ── Envoi ──────────────────────────────────────────────────────────────
         try:
-            self.cl.direct_send(message, user_ids=[user_id])
+            log.debug(f"  [send_dm] Appel direct_send(user_ids=[{user_id}])…")
+            thread = self.cl.direct_send(message, user_ids=[user_id])
+
+            # ── Inspection du thread retourné ──────────────────────────────────
+            thread_id  = getattr(thread, "id", None)
+            thread_v2  = getattr(thread, "thread_v2_id", None)
+            pending    = getattr(thread, "pending", None)
+            msgs       = getattr(thread, "messages", []) or []
+            last_msg   = msgs[0] if msgs else None
+            msg_id     = getattr(last_msg, "id", None) if last_msg else None
+            msg_type   = getattr(last_msg, "item_type", None) if last_msg else None
+            msg_ts     = getattr(last_msg, "timestamp", None) if last_msg else None
+
+            log.info(
+                f"  [send_dm] direct_send() retourné — "
+                f"thread_id={thread_id}  thread_v2={thread_v2}  "
+                f"pending={pending}  messages_count={len(msgs)}"
+            )
+            if msg_id:
+                log.info(
+                    f"  [send_dm] Dernier message — "
+                    f"msg_id={msg_id}  type={msg_type}  timestamp={msg_ts}"
+                )
+            else:
+                log.warning(
+                    f"  [send_dm] ⚠ Aucun message dans le thread retourné "
+                    f"(thread={thread_id}) — le message a peut-être été silencieusement bloqué."
+                )
+
+            if pending:
+                log.warning(
+                    f"  [send_dm] ⚠ thread.pending=True — "
+                    f"le message est dans les DEMANDES de @{clean}, pas dans ses DMs principaux."
+                )
+
+            if not thread_id:
+                log.warning(
+                    f"  [send_dm] ⚠ Pas de thread_id dans la réponse — "
+                    f"l'envoi est peut-être tombé dans le vide."
+                )
+
             self.dm_count += 1
             log.info(f"  @{clean} — DM envoyé ✓  (#{self.dm_count} dans cette session)")
             return True
@@ -331,11 +452,11 @@ class InstagramSender:
             raise SuspiciousActivityError(f"Blocage Instagram lors de l'envoi à @{clean} : {e}")
 
         except (DirectError, ClientError) as e:
-            log.warning(f"  @{clean} — erreur DM : {e}")
+            log.warning(f"  @{clean} — erreur DM ({type(e).__name__}) : {e}")
             return False
 
         except Exception as e:
-            log.warning(f"  @{clean} — erreur inattendue : {e}")
+            log.warning(f"  @{clean} — erreur inattendue ({type(e).__name__}) : {e}")
             return False
 
 
@@ -528,6 +649,17 @@ async def send_campaign(
             if on_progress:
                 on_progress(f"✗ {result.abort_reason}")
             return result
+
+        # Vérification explicite que la session permet bien les appels API
+        session_ok = await asyncio.to_thread(sender.check_session)
+        if not session_ok:
+            result.aborted = True
+            result.abort_reason = "Session Instagram expirée ou invalide — relance save_session.py"
+            log.error(result.abort_reason)
+            if on_progress:
+                on_progress(f"✗ {result.abort_reason}")
+            return result
+
         if on_progress:
             on_progress(f"Connecté en tant que @{credentials['username']}")
 

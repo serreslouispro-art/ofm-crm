@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getModeles, getMessages, sendMessage, getInboxStatus, startInboxListener, stopInboxListener, getComptes } from '../api'
+import { getModeles, getMessages, sendMessage, getInboxStatus, getNonLus, startInboxListener, stopInboxListener, getComptes } from '../api'
 import { Send, ArrowUpRight, ArrowDownLeft, Search, Radio, Square, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 
 const STATUS_COLOR = {
@@ -221,7 +221,10 @@ export default function Inbox() {
   const [igError,        setIgError]        = useState(null)
   const [search,         setSearch]         = useState('')
   const [loading,        setLoading]        = useState(true)
+  const [onglet,         setOnglet]         = useState('tous')  // 'tous' | 'reponses'
   const [comptes,        setComptes]        = useState([])
+  const [compteActif,    setCompteActif]    = useState(null)
+  const [filtreCompte,   setFiltreCompte]   = useState('')
   const [listenerStatus, setListenerStatus] = useState(null)
   const [unread,         setUnread]         = useState({})   // { modeleId: count }
   const bottomRef  = useRef(null)
@@ -232,10 +235,11 @@ export default function Inbox() {
 
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
-    Promise.all([getModeles(), getComptes()])
+    Promise.all([getModeles('contacté'), getComptes()])
       .then(([mods, comps]) => {
         setModeles(mods)
         setComptes(comps)
+        setCompteActif(comps.find(c => c.username === 'links5995')?.id || comps[0]?.id || null)
       })
       .finally(() => setLoading(false))
   }, [])
@@ -286,37 +290,20 @@ export default function Inbox() {
     return () => { live = false; clearTimeout(t) }
   }, [selected?.id])
 
-  // ── Poll all conversations for unread badges (every 30s) ────────────────────
+  // ── Poll non-lus (every 15s) ─────────────────────────────────────────────────
   useEffect(() => {
-    if (!modeles.length) return
     let live = true
-
-    async function pollUnread() {
+    async function pollNonLus() {
       if (!live) return
-      const counts = {}
-      for (const m of modeles) {
-        try {
-          const msgs = await getMessages(m.id)
-          const entrant = msgs.filter(x => x.direction === 'entrant').length
-          counts[m.id] = entrant
-        } catch { /* ignore */ }
-      }
-      if (live) {
-        setUnread(prev => {
-          // Compute new badges: show difference vs last known
-          // Simple approach: show total entrant count as badge
-          const next = {}
-          for (const id in counts) {
-            next[id] = counts[id]
-          }
-          return next
-        })
-      }
-      if (live) setTimeout(pollUnread, 30_000)
+      try {
+        const counts = await getNonLus()
+        if (live) setUnread(counts)
+      } catch { /* ignore */ }
+      if (live) setTimeout(pollNonLus, 15_000)
     }
-    pollUnread()
+    pollNonLus()
     return () => { live = false }
-  }, [modeles.length])
+  }, [])
 
   // ── Auto-scroll ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -329,7 +316,7 @@ export default function Inbox() {
     setSending(true)
     setIgError(null)
     try {
-      const result = await sendMessage(selected.id, text.trim(), direction)
+      const result = await sendMessage(selected.id, text.trim(), direction, compteActif)
       const msgs = await getMessages(selected.id)
       setMessages(msgs)
       setText('')
@@ -354,9 +341,19 @@ export default function Inbox() {
     setListenerStatus(s)
   }
 
-  const filteredModeles = modeles.filter(m =>
-    m.username.toLowerCase().includes(search.toLowerCase())
-  )
+  // Trier par dernier message (date_ajout desc comme proxy)
+  const sortedModeles = [...modeles].sort((a, b) => {
+    const da = a.last_message_date || a.date_ajout || ''
+    const db = b.last_message_date || b.date_ajout || ''
+    return db.localeCompare(da)
+  })
+
+  const filteredModeles = sortedModeles.filter(m => {
+    if (!m.username.toLowerCase().includes(search.toLowerCase())) return false
+    if (onglet === 'reponses') return (unread[m.id] || 0) > 0
+    if (filtreCompte && String(m.compte_utilisé) !== String(filtreCompte)) return false
+    return true
+  })
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -381,6 +378,46 @@ export default function Inbox() {
               comptes={comptes}
             />
           </div>
+
+          {/* Onglets */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+            {[['tous', 'Tous'], ['reponses', 'Réponses']].map(([val, label]) => (
+              <button key={val} onClick={() => setOnglet(val)} style={{
+                padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                background: onglet === val ? 'rgba(124,58,237,0.2)' : 'transparent',
+                color: onglet === val ? '#a78bfa' : '#444466',
+                fontSize: 11, fontWeight: onglet === val ? 600 : 400,
+              }}>
+                {label}
+                {val === 'reponses' && Object.values(unread).reduce((a,b) => a+b, 0) > 0 && (
+                  <span style={{
+                    marginLeft: 5, padding: '1px 5px', borderRadius: 10,
+                    background: '#7c3aed', color: 'white', fontSize: 9, fontWeight: 700,
+                  }}>
+                    {Object.values(unread).filter(v => v > 0).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Filtre par compte */}
+          {comptes.length > 1 && (
+            <select
+              value={filtreCompte}
+              onChange={e => setFiltreCompte(e.target.value)}
+              style={{
+                width: '100%', padding: '6px 8px', borderRadius: 7,
+                border: '1px solid #1a1a2e', background: '#12121e',
+                color: '#eeeef8', fontSize: 11, marginBottom: 8, outline: 'none',
+              }}
+            >
+              <option value=''>Tous les comptes</option>
+              {comptes.map(c => (
+                <option key={c.id} value={c.id}>@{c.username}</option>
+              ))}
+            </select>
+          )}
 
           <div style={{ position: 'relative' }}>
             <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#444466', pointerEvents: 'none' }} />

@@ -45,12 +45,17 @@ def ajouter_modele(conn, username: str, followers: int = 0, bio: str = "",
     return cur.lastrowid
 
 
-def lister_modeles(conn, statut: str = None) -> list:
+def lister_modeles(conn, statut: str = None, compte_id: int = None) -> list:
+    conditions = []
+    params = []
     if statut:
-        return conn.execute(
-            "SELECT * FROM modeles WHERE statut = ? ORDER BY date_ajout DESC", (statut,)
-        ).fetchall()
-    return conn.execute("SELECT * FROM modeles ORDER BY date_ajout DESC").fetchall()
+        conditions.append("statut = ?")
+        params.append(statut)
+    if compte_id:
+        conditions.append("compte_utilise = ?")
+        params.append(compte_id)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    return conn.execute(f"SELECT * FROM modeles {where} ORDER BY date_ajout DESC", params).fetchall()
 
 
 def get_modele(conn, modele_id: int):
@@ -88,3 +93,12 @@ def lister_messages(conn, modele_id: int) -> list:
         "SELECT * FROM messages WHERE modele_id = ? ORDER BY date_envoi ASC",
         (modele_id,),
     ).fetchall()
+
+
+def marquer_lu(conn, modele_id: int):
+    conn.execute("UPDATE messages SET lu = 1 WHERE modele_id = ? AND direction = 'entrant'", (modele_id,))
+    conn.commit()
+
+def compter_non_lus(conn, modele_id: int) -> int:
+    row = conn.execute("SELECT COUNT(*) FROM messages WHERE modele_id = ? AND direction = 'entrant' AND lu = 0", (modele_id,)).fetchone()
+    return row[0] if row else 0

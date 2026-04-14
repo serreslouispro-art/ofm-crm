@@ -20,8 +20,8 @@ export const updateStatut  = (id, s)  => request(`/modeles/${id}/statut`, { meth
 export const deleteModele  = (id)     => request(`/modeles/${id}`, { method: 'DELETE' })
 
 export const getMessages   = (mid)              => request(`/modeles/${mid}/messages`)
-export const sendMessage   = (mid, contenu, direction = 'sortant') =>
-  request(`/modeles/${mid}/messages`, { method: 'POST', body: JSON.stringify({ contenu, direction }) })
+export const sendMessage   = (mid, contenu, direction = 'sortant', compte_id = null) =>
+  request(`/modeles/${mid}/messages`, { method: 'POST', body: JSON.stringify({ contenu, direction, compte_id }) })
 
 export const getComptes      = ()           => request('/comptes')
 export const addCompte       = (u, p)       => request('/comptes', { method: 'POST', body: JSON.stringify({ username: u, password: p }) })
@@ -37,6 +37,10 @@ export const startCampaign    = (data) => request('/campaign/start',  { method: 
 export const getCampaignStatus = ()    => request('/campaign/status')
 
 // Inbox listener
+export const getNonLus        = ()     => request('/modeles/non_lus')
 export const getInboxStatus   = ()     => request('/inbox/status')
 export const startInboxListener = (data) => request('/inbox/start', { method: 'POST', body: JSON.stringify(data) })
 export const stopInboxListener  = ()   => request('/inbox/stop',  { method: 'POST', body: JSON.stringify({}) })
+
+export const startCampaignAuto = (data) => request('/campaign/auto', { method: 'POST', body: JSON.stringify(data) })
+export const stopCampaign = () => request('/campaign/stop', { method: 'POST', body: '{}' })

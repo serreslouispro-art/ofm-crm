@@ -63,9 +63,9 @@ COOKIES_FILE = Path(__file__).parent / "ig_session.json"
 
 # Délais aléatoires (secondes) pour imiter un comportement humain
 DELAY_BETWEEN_PROFILES = (2.0, 4.5)   # entre deux visites de profil
-DELAY_SCROLL           = (1.0, 2.2)   # entre deux scrolls dans la modale
-SCROLL_STEP_PX         = 700          # pixels par scroll
-MAX_EMPTY_SCROLLS      = 6            # arrête si N scrolls consécutifs ne chargent rien
+DELAY_SCROLL           = (1.5, 2.5)   # entre deux scrolls dans la modale
+SCROLL_STEP_PX         = 700          # pixels par scroll (fallback)
+MAX_EMPTY_SCROLLS      = 8            # arrête si N scrolls consécutifs ne chargent rien
 
 # Comptes système Instagram à ignorer dans les résultats
 EXCLUDED = {
@@ -696,8 +696,35 @@ class InstagramScraper:
             else:
                 empty_scrolls = 0
 
-            # Scroller dans la modale pour charger la suite
-            await dialog.evaluate(f"el => el.scrollTop += {SCROLL_STEP_PX}")
+            # Scroller dans la modale pour charger la suite.
+            # Instagram rend le [role="dialog"] non-scrollable (overflow:hidden) ;
+            # le conteneur scrollable réel est un div/ul enfant. On le détecte en
+            # cherchant le premier descendant dont scrollHeight > clientHeight.
+            scrolled = await self.page.evaluate("""
+                () => {
+                    const dialog = document.querySelector('[role="dialog"]');
+                    if (!dialog) return false;
+                    // Parcourir tous les descendants pour trouver celui qui scrolle
+                    const candidates = Array.from(dialog.querySelectorAll('*'));
+                    const scroller = candidates.find(
+                        el => el.scrollHeight > el.clientHeight + 10
+                    );
+                    if (scroller) {
+                        scroller.scrollTop = scroller.scrollHeight;
+                        return true;
+                    }
+                    // Fallback : scroller le dialog lui-même
+                    dialog.scrollTop = dialog.scrollHeight;
+                    return false;
+                }
+            """)
+
+            # Fallback supplémentaire : scrollIntoView sur le dernier élément li
+            if not scrolled:
+                items = await dialog.query_selector_all("li")
+                if items:
+                    await items[-1].scroll_into_view_if_needed()
+
             await _delay(*DELAY_SCROLL)
 
         result = list(collected)[:limit]

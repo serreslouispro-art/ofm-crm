@@ -779,12 +779,12 @@ export default function Prospection() {
               {/* Table header */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: '44px 1fr 90px 90px 180px 70px 80px',
+                gridTemplateColumns: '44px 1fr 90px 90px 180px 70px 80px 40px',
                 background: C.surf,
                 padding: '10px 16px',
                 borderBottom: `1px solid ${C.border}`,
               }}>
-                {['', 'Profil', 'Statut', 'Followers', 'Bio', 'Lien', 'Ajouté'].map((h, i) => (
+                {['', 'Profil', 'Statut', 'Followers', 'Bio', 'Lien', 'Ajouté', ''].map((h, i) => (
                   <span key={i} style={{ fontSize: 10, fontWeight: 600, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     {h}
                   </span>
@@ -792,7 +792,13 @@ export default function Prospection() {
               </div>
 
               {/* Rows */}
-              {prospects.map((m, idx) => {
+              {prospects
+  .filter(m => {
+    if (form.account_id && String(m.compte_utilisé) !== String(form.account_id)) return false
+    if (m.statut === 'contacté' || m.statut === 'signé') return false
+    return true
+  })
+  .map((m, idx) => {
                 const isSelected = selected.has(m.id)
                 return (
                   <div
@@ -800,7 +806,7 @@ export default function Prospection() {
                     onClick={() => toggleSelect(m.id)}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '44px 1fr 90px 90px 180px 70px 80px',
+                      gridTemplateColumns: '44px 1fr 90px 90px 180px 70px 80px 40px',
                       padding: '11px 16px',
                       borderTop: idx > 0 ? `1px solid ${C.border}` : 'none',
                       background: isSelected ? 'rgba(124,58,237,0.06)' : 'transparent',
@@ -883,6 +889,28 @@ export default function Prospection() {
 
                     {/* Date */}
                     <p style={{ fontSize: 11, color: C.dim }}>{m.date_ajout}</p>
+                    {/* Supprimer */}
+                    <div onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={async () => {
+                          await fetch(`http://127.0.0.1:5000/modeles/${m.id}`, { method: 'DELETE' })
+                          setProspects(prev => prev.filter(p => p.id !== m.id))
+                          setSelected(prev => { const n = new Set(prev); n.delete(m.id); return n })
+                        }}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: '#444466', padding: 4, borderRadius: 4,
+                          display: 'flex', alignItems: 'center',
+                        }}
+                        title="Supprimer"
+                        onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#444466'}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 )
               })}

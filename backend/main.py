@@ -64,9 +64,10 @@ def delete_compte(compte_id):
 
 @app.get("/modeles")
 def get_modeles():
-    statut = request.args.get("statut")
+    statut    = request.args.get("statut")
+    compte_id = request.args.get("compte_id", type=int)
     with get_connection() as conn:
-        rows = crud.lister_modeles(conn, statut)
+        rows = crud.lister_modeles(conn, statut, compte_id)
         return jsonify([dict(r) for r in rows])
 
 
@@ -123,8 +124,16 @@ def delete_modele(modele_id):
 @app.get("/modeles/<int:modele_id>/messages")
 def get_messages(modele_id):
     with get_connection() as conn:
+        crud.marquer_lu(conn, modele_id)
         rows = crud.lister_messages(conn, modele_id)
         return jsonify([dict(r) for r in rows])
+
+@app.get("/modeles/non_lus")
+def get_non_lus():
+    with get_connection() as conn:
+        modeles = crud.lister_modeles(conn)
+        result = {m["id"]: crud.compter_non_lus(conn, m["id"]) for m in modeles}
+        return jsonify(result)
 
 
 @app.post("/modeles/<int:modele_id>/messages")
@@ -149,12 +158,14 @@ def post_message(modele_id):
 
     # Envoyer sur Instagram si message sortant
     if direction == "sortant":
-        creds = _get_account_credentials(None)
+        compte_id = data.get("compte_id")
+        creds = _get_account_credentials(compte_id)
         if creds:
             try:
                 from sender import InstagramSender
                 s = InstagramSender(creds["username"], creds["password"])
-                if s.login():
+                logged_in = s.login()
+                if logged_in:
                     ig_sent = s.send_dm(modele["username"], contenu)
                 else:
                     ig_sent  = False
@@ -306,6 +317,15 @@ def campaign_status():
     })
 
 
+
+@app.post("/campaign/stop")
+def campaign_stop():
+    global _campaign_state, _scrape_state
+    _campaign_state["running"] = False
+    _campaign_state["result"]  = {"aborted": True, "abort_reason": "Arrêt manuel"}
+    _scrape_state["running"]   = False
+    return jsonify({"ok": True})
+
 @app.post("/campaign/start")
 def campaign_start():
     if _campaign_state["running"]:
@@ -366,6 +386,106 @@ def campaign_start():
         "dry_run": dry_run,
     }), 202
 
+
+
+
+# ---------------------------------------------------------------------------
+# Route — campagne automatique (scrape + DM)
+# ---------------------------------------------------------------------------
+
+@app.post("/campaign/auto")
+def campaign_auto():
+    """Lance scrape + DM en séquence pour un compte donné."""
+    if _campaign_state["running"] or _scrape_state["running"]:
+        abort(409, "Une campagne ou un scraping est déjà en cours")
+
+    data       = request.get_json(force=True)
+    account_id = int(data.get("account_id"))
+    target     = (data.get("target") or "").strip().lstrip("@")
+    limit      = int(data.get("limit", 100))
+    templates  = data.get("templates") or None
+    dms        = int(data.get("dms_per_day", 40))
+    delay_s_min = int(data.get("delay_session_min", 45)) * 60
+    delay_s_max = int(data.get("delay_session_max", 90)) * 60
+
+    if not target:
+        abort(400, "target requis")
+
+    with get_connection() as conn:
+        comptes = crud.lister_comptes(conn)
+    compte = next((c for c in comptes if c["id"] == account_id), None)
+    if not compte:
+        abort(404, "Compte introuvable")
+
+    credentials = {"username": compte["username"], "password": compte["password"]}
+    filters = ScraperFilters()
+
+    def _run():
+        _scrape_state["running"] = True
+        _scrape_state["log"]     = []
+        _scrape_state["result"]  = None
+        _campaign_state["running"] = True
+        _campaign_state["log"]     = []
+        _campaign_state["result"]  = None
+
+        def log(msg):
+            _scrape_state["log"].append(msg)
+            _campaign_state["log"].append(msg)
+
+        try:
+            log(f"[AUTO] Scraping @{target} avec @{compte['username']}…")
+            result = asyncio.run(
+                run_scrape(
+                    credentials=credentials,
+                    target=target,
+                    filters=filters,
+                    account_id=account_id,
+                    limit=limit,
+                    headless=True,
+                    on_progress=log,
+                )
+            )
+            _scrape_state["result"] = result
+            _scrape_state["running"] = False
+            log(f"[AUTO] Scraping terminé — {result.get('added', 0)} profils ajoutés")
+            log(f"[AUTO] Lancement des DMs…")
+
+            from datetime import datetime
+            def log_dm(msg):
+                ts = datetime.now().strftime("%H:%M:%S")
+                _campaign_state["log"].append(f"{ts}  {msg}")
+
+            r = asyncio.run(send_campaign(
+                credentials=credentials,
+                account_id=account_id,
+                templates=templates,
+                dms_per_day=dms,
+                headless=True,
+                dry_run=False,
+                delay_session=(delay_s_min, delay_s_max),
+                on_progress=log_dm,
+            ))
+            _campaign_state["result"] = {
+                "total_sent":    r.total_sent,
+                "total_failed":  r.total_failed,
+                "total_skipped": r.total_skipped,
+                "aborted":       r.aborted,
+                "abort_reason":  r.abort_reason,
+            }
+        except Exception as e:
+            _campaign_state["result"] = {"error": str(e)}
+            _scrape_state["result"]   = {"error": str(e)}
+        finally:
+            _scrape_state["running"]   = False
+            _campaign_state["running"] = False
+
+    threading.Thread(target=_run, daemon=True).start()
+
+    return jsonify({
+        "ok":     True,
+        "message": f"Campagne auto lancée — scrape @{target} + {dms} DMs",
+        "compte": compte["username"],
+    }), 202
 
 # ---------------------------------------------------------------------------
 # Routes — inbox listener
