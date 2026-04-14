@@ -592,4 +592,4 @@ if __name__ == "__main__":
         methods = ",".join(sorted(m for m in rule.methods if m not in {"HEAD", "OPTIONS"}))
         print(f"  [{methods:20}] {rule}")
     print("=" * 60)
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', debug=False, port=5000)
