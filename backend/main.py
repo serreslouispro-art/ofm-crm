@@ -10,7 +10,7 @@ from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 from database import get_connection, init_db
 import crud
-from scraper import scrape as run_scrape, ScraperFilters
+from scraper_instagrapi import scrape as run_scrape, ScraperFilters
 from sender import send_campaign, DEFAULT_TEMPLATES
 from inbox_listener import start_listener, stop_listener, get_status as get_listener_status
 
