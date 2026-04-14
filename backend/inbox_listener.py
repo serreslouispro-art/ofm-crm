@@ -134,6 +134,20 @@ def _scan(cl: Client) -> dict:
                     continue
                 with get_connection() as conn:
                     crud.ajouter_message(conn, modele["id"], text, direction="entrant")
+                    # Incrémenter reponses du template utilisé pour ce modèle
+                    try:
+                        last_out = conn.execute(
+                            "SELECT contenu FROM messages WHERE modele_id=? AND direction='sortant' ORDER BY id DESC LIMIT 1",
+                            (modele["id"],)
+                        ).fetchone()
+                        if last_out:
+                            conn.execute(
+                                "UPDATE templates SET reponses=reponses+1 WHERE contenu=?",
+                                (last_out["contenu"],)
+                            )
+                            conn.commit()
+                    except Exception:
+                        pass
                 existing_texts.add(text)
                 new_count += 1
                 _log_cb(f"  Nouveau msg de @{username} : {text[:60]}")
