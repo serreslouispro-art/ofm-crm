@@ -247,7 +247,7 @@ export default function Comptes() {
         limit: parseInt(getF(compteId, 'limit', 50)),
         dms_per_day: parseInt(getF(compteId, 'dms', 40)),
         delay_session_min: delai,
-        delay_session_max: delai + 15,
+        delay_session_max: Math.round(delai * 2.5),
         min_followers: parseInt(getF(compteId, 'minF', 0)) || 0,
         max_followers: parseInt(getF(compteId, 'maxF', '')) || null,
         bio_keywords: (getF(compteId, 'keywords', '')).split(',').map(k => k.trim()).filter(Boolean),
