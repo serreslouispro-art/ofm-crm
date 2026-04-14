@@ -103,7 +103,6 @@ def _human_delay(min_s: int, max_s: int) -> int:
     """Délai aléatoire à distribution non-uniforme pour simuler un humain.
     Parfois rapide (45s), parfois très long (4min), rarement entre les deux.
     """
-    import random
     r = random.random()
     if r < 0.2:      # 20% : délai court (45-90s)
         return random.randint(min_s, min_s + 45)
