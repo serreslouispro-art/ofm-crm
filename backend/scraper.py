@@ -738,19 +738,21 @@ class InstagramScraper:
         target: str,
         filters: ScraperFilters,
         account_id: Optional[int],
-        limit: int = 100,
+        limit: int = 50,
+        scrape_limit: int = 200,
+        genre: str = "tous",
         on_progress: Optional[Callable[[str], None]] = None,
     ) -> dict:
         """
         Pipeline complet :
-          get_followers_list → get_profile → filtres → save to DB
+          get_followers_list (scrape_limit bruts) → get_profile → filtres → genre IA → save to DB (max limit)
 
         Retourne un dictionnaire de statistiques.
         """
         stats = {"added": 0, "skipped": 0, "filtered_out": 0, "errors": 0}
 
         usernames = await self.get_followers_list(
-            target, limit=limit, on_progress=on_progress
+            target, limit=scrape_limit, on_progress=on_progress
         )
         if not usernames:
             return stats
@@ -791,6 +793,20 @@ class InstagramScraper:
                 print(f"{prefix} — filtré ({reason})")
                 continue
 
+            # Filtre genre IA si activé
+            if genre in ("femme", "homme"):
+                from sender import _detect_genre
+                detected = _detect_genre(username, profile.bio or "", username)
+                if detected != genre and detected != "inconnu":
+                    stats["filtered_out"] += 1
+                    print(f"{prefix} — filtré genre ({detected})")
+                    continue
+
+            # Stopper si on a atteint la limite souhaitée
+            if stats["added"] >= limit:
+                print(f"[scraper] Limite de {limit} profils ajoutés atteinte — arrêt")
+                break
+
             # Enregistrer en base
             conn = get_connection()
             crud.ajouter_modele(
@@ -821,7 +837,9 @@ async def scrape(
     target: str,
     filters: Optional[ScraperFilters] = None,
     account_id: Optional[int] = None,
-    limit: int = 100,
+    limit: int = 50,
+    scrape_limit: int = 200,
+    genre: str = "tous",
     headless: bool = False,
     on_progress: Optional[Callable[[str], None]] = None,
 ) -> dict:
@@ -860,6 +878,8 @@ async def scrape(
             filters=filters,
             account_id=account_id,
             limit=limit,
+            scrape_limit=scrape_limit,
+            genre=genre,
             on_progress=on_progress,
         )
 

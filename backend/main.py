@@ -218,7 +218,9 @@ def scrape_start():
     else:
         account_id = None
     target      = (data.get("target") or "").strip().lstrip("@")
-    limit       = int(data.get("limit", 100))
+    limit        = int(data.get("limit", 50))
+    scrape_limit = int(data.get("scrape_limit", 200))
+    genre_scrape = data.get("genre", "tous")
     headless    = bool(data.get("headless", False))
 
     if not target:
@@ -263,6 +265,8 @@ def scrape_start():
                     filters=filters,
                     account_id=compte["id"],
                     limit=limit,
+                    scrape_limit=scrape_limit,
+                    genre=genre_scrape,
                     headless=headless,
                     on_progress=log,
                 )
@@ -402,7 +406,8 @@ def campaign_auto():
     data       = request.get_json(force=True)
     account_id = int(data.get("account_id"))
     target     = (data.get("target") or "").strip().lstrip("@")
-    limit      = int(data.get("limit", 100))
+    limit        = int(data.get("limit",        50))
+    scrape_limit = int(data.get("scrape_limit", 200))
     templates  = data.get("templates") or None
     dms        = int(data.get("dms_per_day", 40))
     delay_s_min = int(data.get("delay_session_min", 45)) * 60
@@ -442,7 +447,8 @@ def campaign_auto():
                     filters=filters,
                     account_id=account_id,
                     limit=limit,
-                    headless=True,
+                    limit=limit,
+                    scrape_limit=scrape_limit,                    headless=True,
                     on_progress=log,
                 )
             )
