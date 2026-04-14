@@ -535,6 +535,49 @@ def inbox_stop():
 
 # ---------------------------------------------------------------------------
 
+
+# ── Templates ──────────────────────────────────────────────────────────────────
+
+@app.get("/templates")
+def templates_list():
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM templates ORDER BY id DESC").fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.post("/templates")
+def templates_create():
+    data = request.get_json()
+    with get_connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO templates (nom, contenu, actif) VALUES (?,?,1)",
+            (data["nom"], data["contenu"])
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM templates WHERE id=?", (cur.lastrowid,)).fetchone()
+    return jsonify(dict(row)), 201
+
+@app.patch("/templates/<int:tid>")
+def templates_update(tid):
+    data = request.get_json()
+    fields, vals = [], []
+    for k in ("nom", "contenu", "actif"):
+        if k in data:
+            fields.append(f"{k}=?")
+            vals.append(data[k])
+    vals.append(tid)
+    with get_connection() as conn:
+        conn.execute(f"UPDATE templates SET {', '.join(fields)} WHERE id=?", vals)
+        conn.commit()
+        row = conn.execute("SELECT * FROM templates WHERE id=?", (tid,)).fetchone()
+    return jsonify(dict(row))
+
+@app.delete("/templates/<int:tid>")
+def templates_delete(tid):
+    with get_connection() as conn:
+        conn.execute("DELETE FROM templates WHERE id=?", (tid,))
+        conn.commit()
+    return jsonify({"ok": True})
+
 if __name__ == "__main__":
     init_db()
     print("=" * 60)

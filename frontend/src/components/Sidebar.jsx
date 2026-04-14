@@ -7,6 +7,7 @@ const NAV = [
   { to: '/pipeline',    label: 'Pipeline',    icon: GitFork },
   { to: '/inbox',       label: 'Inbox',       icon: MessageSquare },
   { to: '/comptes',     label: 'Comptes',     icon: Users },
+  { to: '/templates',   label: 'Templates',   icon: Users },
 ]
 
 export default function Sidebar() {

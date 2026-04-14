@@ -19,6 +19,7 @@ export default function App() {
             <Route path="/pipeline"    element={<Pipeline />} />
             <Route path="/inbox"       element={<Inbox />} />
             <Route path="/comptes"     element={<Comptes />} />
+            <Route path="/templates"   element={<Templates />} />
           </Routes>
         </main>
       </div>
