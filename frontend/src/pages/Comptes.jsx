@@ -228,7 +228,12 @@ export default function Comptes() {
   const [confirmId, setConfirmId] = useState(null)
   const [cibles,    setCibles]    = useState({})
   const [autoState, setAutoState] = useState({})
-  const [delais,    setDelais]    = useState({})  // { compteId: minutes }
+  const [delais,    setDelais]       = useState({})
+  const [filtres,   setFiltres]      = useState({})
+  const [showFiltres, setShowFiltres] = useState({})
+
+  function getF(id, key, def) { return filtres[id]?.[key] ?? def }
+  function setF(id, key, val) { setFiltres(p => ({ ...p, [id]: { ...p[id], [key]: val } })) }
 
   async function handleAuto(compteId) {
     const target = (cibles[compteId] || '').trim().replace('@', '')
@@ -236,7 +241,18 @@ export default function Comptes() {
     setAutoState(prev => ({ ...prev, [compteId]: { running: true, log: [], result: null } }))
     try {
       const delai = delais[compteId] || 45
-      await startCampaignAuto({ account_id: compteId, target, limit: 3, dms_per_day: 3, delay_session_min: delai, delay_session_max: delai + 15 })
+      await startCampaignAuto({
+        account_id: compteId, target,
+        limit: parseInt(getF(compteId, 'limit', 50)),
+        dms_per_day: parseInt(getF(compteId, 'dms', 40)),
+        delay_session_min: delai,
+        delay_session_max: delai + 15,
+        min_followers: parseInt(getF(compteId, 'minF', 0)) || 0,
+        max_followers: parseInt(getF(compteId, 'maxF', '')) || null,
+        bio_keywords: (getF(compteId, 'keywords', '')).split(',').map(k => k.trim()).filter(Boolean),
+        require_external_link: getF(compteId, 'lien', false),
+        genre: getF(compteId, 'genre', 'tous'),
+      })
       const poll = async () => {
         const s = await getCampaignStatus()
         setAutoState(prev => ({ ...prev, [compteId]: { ...prev[compteId], running: s.running, log: s.log || [] } }))
@@ -435,7 +451,49 @@ export default function Comptes() {
                       style={{ width: 80, accentColor: '#7c3aed' }}
                     />
                   </div>
+                  <button
+                    onClick={() => setShowFiltres(p => ({ ...p, [compte.id]: !p[compte.id] }))}
+                    style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #1a1a2e', background: showFiltres[compte.id] ? 'rgba(124,58,237,0.15)' : '#12121e', color: showFiltres[compte.id] ? '#a78bfa' : '#666688', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >⚙ Filtres</button>
                 </div>
+
+                {showFiltres[compte.id] && (
+                  <div style={{ marginTop: 10, padding: '14px 16px', borderRadius: 10, background: '#0a0a14', border: '1px solid #1a1a2e', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: 10, color: '#444466' }}>Followers min</span>
+                      <input type="number" placeholder="0" value={getF(compte.id,'minF','')} onChange={e => setF(compte.id,'minF',e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, width: 80, outline: 'none' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: 10, color: '#444466' }}>Followers max</span>
+                      <input type="number" placeholder="∞" value={getF(compte.id,'maxF','')} onChange={e => setF(compte.id,'maxF',e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, width: 80, outline: 'none' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: 10, color: '#444466' }}>Mots-clés bio (virgule)</span>
+                      <input placeholder="onlyfans, model..." value={getF(compte.id,'keywords','')} onChange={e => setF(compte.id,'keywords',e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, width: 160, outline: 'none' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: 10, color: '#444466' }}>Profils à scraper</span>
+                      <input type="number" value={getF(compte.id,'limit',50)} onChange={e => setF(compte.id,'limit',e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, width: 70, outline: 'none' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: 10, color: '#444466' }}>DMs/jour</span>
+                      <input type="number" value={getF(compte.id,'dms',40)} onChange={e => setF(compte.id,'dms',e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, width: 60, outline: 'none' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: 10, color: '#444466' }}>Genre cible (IA)</span>
+                      <select value={getF(compte.id,'genre','tous')} onChange={e => setF(compte.id,'genre',e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, outline: 'none' }}>
+                        <option value="tous">Tous</option>
+                        <option value="femme">Femmes uniquement</option>
+                        <option value="homme">Hommes uniquement</option>
+                      </select>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 2 }}>
+                      <input type="checkbox" checked={getF(compte.id,'lien',false)} onChange={e => setF(compte.id,'lien',e.target.checked)} style={{ accentColor: '#7c3aed' }} />
+                      <span style={{ fontSize: 11, color: '#666688' }}>Lien externe requis</span>
+                    </label>
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button

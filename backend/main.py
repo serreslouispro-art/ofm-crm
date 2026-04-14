@@ -407,6 +407,7 @@ def campaign_auto():
     dms        = int(data.get("dms_per_day", 40))
     delay_s_min = int(data.get("delay_session_min", 45)) * 60
     delay_s_max = int(data.get("delay_session_max", 90)) * 60
+    genre       = data.get("genre", "tous")
 
     if not target:
         abort(400, "target requis")
@@ -463,6 +464,7 @@ def campaign_auto():
                 headless=True,
                 dry_run=False,
                 delay_session=(delay_s_min, delay_s_max),
+                genre=genre,
                 on_progress=log_dm,
             ))
             _campaign_state["result"] = {

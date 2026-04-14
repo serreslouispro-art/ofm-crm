@@ -52,6 +52,25 @@ from instagrapi.exceptions import (
     DirectError,
 )
 
+
+import anthropic as _anthropic
+
+def _detect_genre(username: str, bio: str, full_name: str) -> str:
+    """Retourne 'femme', 'homme' ou 'inconnu' via Claude."""
+    try:
+        client = _anthropic.Anthropic()
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=10,
+            messages=[{
+                "role": "user",
+                "content": f"Instagram profile: username={username}, name={full_name}, bio={bio}. Is this person male or female? Reply with only: femme, homme, or inconnu."
+            }]
+        )
+        return msg.content[0].text.strip().lower()
+    except Exception:
+        return "inconnu"
+
 from database import get_connection
 import crud
 
@@ -75,8 +94,21 @@ def _session_file(username: str) -> Path:
 DMS_PER_DAY       = 50
 N_SESSIONS        = 4
 
-DELAY_DM_MIN      = 60
-DELAY_DM_MAX      = 180
+DELAY_DM_MIN      = 45
+DELAY_DM_MAX      = 240
+
+def _human_delay(min_s: int, max_s: int) -> int:
+    """Délai aléatoire à distribution non-uniforme pour simuler un humain.
+    Parfois rapide (45s), parfois très long (4min), rarement entre les deux.
+    """
+    import random
+    r = random.random()
+    if r < 0.2:      # 20% : délai court (45-90s)
+        return random.randint(min_s, min_s + 45)
+    elif r < 0.7:    # 50% : délai normal (90-180s)
+        return random.randint(min_s + 45, min_s + 135)
+    else:            # 30% : délai long (180-240s)
+        return random.randint(min_s + 135, max_s)
 
 DELAY_SESSION_MIN = 45 * 60   # 45 min
 DELAY_SESSION_MAX = 90 * 60   # 90 min
@@ -403,6 +435,15 @@ class InstagramSender:
 
         # ── Envoi ──────────────────────────────────────────────────────────────
         try:
+            # ── Simulation de frappe humaine ───────────────────────────────────
+            typing_delay = random.uniform(3, 12)  # temps de "frappe" aléatoire
+            log.debug(f"  [send_dm] Simulation frappe {typing_delay:.1f}s…")
+            try:
+                self.cl.direct_send_seen(user_id)  # marquer comme vu
+            except Exception:
+                pass
+            await asyncio.sleep(typing_delay)
+
             log.debug(f"  [send_dm] Appel direct_send(user_ids=[{user_id}])…")
             thread = self.cl.direct_send(message, user_ids=[user_id])
 
@@ -538,7 +579,7 @@ async def _run_session(
 
         # ── Délai avant le prochain DM ──
         if i < len(targets):
-            wait = random.randint(*delay_range)
+            wait = _human_delay(*delay_range)
             eta  = (datetime.now() + timedelta(seconds=wait)).strftime("%H:%M:%S")
             log.info(f"  Pause {wait}s — prochain DM à {eta}")
             if on_progress:
@@ -559,6 +600,7 @@ async def _run_session(
 
 async def send_campaign(
     credentials:   dict,
+    genre:         str                 = 'tous',
     account_id:    Optional[int]       = None,
     modele_ids:    Optional[list[int]] = None,
     templates:     Optional[list[str]] = None,
@@ -602,6 +644,23 @@ async def send_campaign(
     else:
         all_prospects = crud.lister_modeles(conn, statut="prospect")
     conn.close()
+
+    # Filtre genre IA
+    if genre in ('femme', 'homme'):
+        log.info(f"Filtre genre IA activé : {genre}")
+        filtered = []
+        for p in all_prospects:
+            detected = await asyncio.to_thread(
+                _detect_genre,
+                dict(p)["username"],
+                dict(p).get("bio") or "",
+                dict(p).get("username") or ""
+            )
+            if detected == genre or detected == "inconnu":
+                filtered.append(p)
+            else:
+                log.info(f"  Filtré @{dict(p)['username']} ({detected})")
+        all_prospects = filtered
 
     if not all_prospects:
         msg = "Aucun profil à contacter."
