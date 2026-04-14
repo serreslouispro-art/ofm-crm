@@ -540,6 +540,8 @@ async def _run_session(
         username = modele["username"]
         template = random.choice(templates)
         message  = _render(template, username)
+        # Tracking template utilisé
+        _template_used = template
 
         progress_msg = f"Session {session_num} · DM {i}/{len(targets)} → @{username}"
         if on_progress:
@@ -556,6 +558,13 @@ async def _run_session(
         # ── Envoi réel (appel bloquant → thread séparé) ──
         try:
             success = await asyncio.to_thread(sender.send_dm, username, message)
+            if success:
+                try:
+                    with get_connection() as conn:
+                        conn.execute("UPDATE templates SET envoyes=envoyes+1 WHERE contenu=? AND actif=1", (_template_used,))
+                        conn.commit()
+                except Exception:
+                    pass
 
         except SuspiciousActivityError as e:
             log.error(f"  ⚠  ACTIVITÉ SUSPECTE : {e}")
@@ -632,7 +641,19 @@ async def send_campaign(
         CampaignResult avec statistiques détaillées
     """
     if not templates:
-        templates = DEFAULT_TEMPLATES
+        # Charger les templates actifs depuis la BDD
+        try:
+            with get_connection() as conn:
+                rows = conn.execute("SELECT contenu FROM templates WHERE actif=1").fetchall()
+            if rows:
+                templates = [r["contenu"] for r in rows]
+                log.info(f"Templates BDD chargés : {len(templates)} templates actifs")
+            else:
+                templates = DEFAULT_TEMPLATES
+                log.info("Aucun template en BDD — utilisation des templates par défaut")
+        except Exception as e:
+            log.warning(f"Erreur chargement templates BDD : {e} — fallback défaut")
+            templates = DEFAULT_TEMPLATES
 
     result = CampaignResult()
 
