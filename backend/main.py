@@ -447,8 +447,8 @@ def campaign_auto():
                     filters=filters,
                     account_id=account_id,
                     limit=limit,
-                    limit=limit,
-                    scrape_limit=scrape_limit,                    headless=True,
+                    scrape_limit=scrape_limit,
+                    headless=True,
                     on_progress=log,
                 )
             )

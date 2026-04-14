@@ -1,3 +1,4 @@
+import time
 """
 backend/sender.py — Envoi automatique de DMs Instagram via instagrapi
 
@@ -34,6 +35,7 @@ import asyncio
 import json
 import logging
 import random
+import time
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
