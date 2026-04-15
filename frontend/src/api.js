@@ -1,4 +1,4 @@
-const BASE = 'http://127.0.0.1:5000'
+const BASE = 'http://178.104.155.64:5000'
 
 async function request(path, options = {}) {
   const res = await fetch(BASE + path, {
