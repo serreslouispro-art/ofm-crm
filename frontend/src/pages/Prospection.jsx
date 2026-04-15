@@ -776,7 +776,7 @@ export default function Prospection() {
                 onClick={async () => {
                   if (!window.confirm(`Supprimer ${selected.size} profil(s) ?`)) return
                   await Promise.all(Array.from(selected).map(id =>
-                    fetch(`http://178.104.155.64:5000/modeles/${id}`, { method: 'DELETE' })
+                    fetch(`http://178.104.155.64:5000/modeles/${id}`, { method: 'DELETE' }).then(r => { if (!r.ok) throw new Error(r.status) })
                   ))
                   setProspects(prev => prev.filter(p => !selected.has(p.id)))
                   setSelected(new Set())
@@ -991,7 +991,7 @@ export default function Prospection() {
                     <div onClick={e => e.stopPropagation()}>
                       <button
                         onClick={async () => {
-                          await fetch(`http://127.0.0.1:5000/modeles/${m.id}`, { method: 'DELETE' })
+                          await fetch(`http://178.104.155.64:5000/modeles/${m.id}`, { method: 'DELETE' })
                           setProspects(prev => prev.filter(p => p.id !== m.id))
                           setSelected(prev => { const n = new Set(prev); n.delete(m.id); return n })
                         }}
