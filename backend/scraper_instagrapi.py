@@ -127,19 +127,26 @@ def scrape(
         try:
             user_info = followers[user_id]
             username = user_info.username
-            followers_count = getattr(user_info, "follower_count", None) or getattr(user_info, "followers", None) or 0
-            bio = getattr(user_info, "biography", None) or ""
-            lien = getattr(user_info, "external_url", None) or ""
+            # Doublon rapide avant appel API
+            if username in existing or f"@{username}" in existing:
+                stats["skipped"] += 1
+                continue
+            try:
+                full_info = cl.user_info(user_id)
+                followers_count = full_info.follower_count or 0
+                bio = full_info.biography or ""
+                lien = full_info.external_url or ""
+            except Exception:
+                followers_count = 0
+                bio = getattr(user_info, "biography", None) or ""
+                lien = getattr(user_info, "external_url", None) or ""
 
             prefix = f"[{i:>3}/{total}] @{username}"
 
             if on_progress and i % 5 == 0:
                 on_progress(f"Analyse {i}/{total} : @{username}")
 
-            # Doublon ?
-            if username in existing or f"@{username}" in existing:
-                stats["skipped"] += 1
-                continue
+            # Doublon déjà vérifié
 
             profile = ScrapedProfile(username=username, followers=followers_count, bio=bio, lien=lien)
 
