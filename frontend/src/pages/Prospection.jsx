@@ -347,6 +347,7 @@ export default function Prospection() {
   const [selected,  setSelected]  = useState(new Set())
   const [showModal, setShowModal] = useState(false)
   const [dryRun,    setDryRun]    = useState(false)
+  const [dateFilter, setDateFilter] = useState('')
 
   // ── Load initial data ────────────────────────────────────────────────────
   useEffect(() => {
@@ -732,6 +733,30 @@ export default function Prospection() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+
+          {/* Filtre date */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              style={{
+                padding: '5px 10px', borderRadius: 7, fontSize: 12,
+                border: `1px solid ${dateFilter ? C.accent : C.border}`,
+                background: C.surf, color: dateFilter ? C.accentL : C.muted,
+                outline: 'none', cursor: 'pointer',
+              }}
+            />
+            {dateFilter && (
+              <button onClick={() => setDateFilter('')} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: C.dim, padding: 2, display: 'flex', alignItems: 'center',
+              }}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
             {prospects.length > 0 && (
               <button onClick={toggleAll} style={{
                 display: 'flex', alignItems: 'center', gap: 6,
@@ -843,6 +868,7 @@ export default function Prospection() {
   .filter(m => {
     if (form.account_id && String(m.compte_utilisé) !== String(form.account_id)) return false
     if (m.statut === 'contacté' || m.statut === 'signé') return false
+    if (dateFilter && m.date_ajout && !m.date_ajout.startsWith(dateFilter)) return false
     return true
   })
   .map((m, idx) => {
