@@ -415,6 +415,7 @@ export default function Prospection() {
         bio_keywords:          form.bio_keywords,
         require_external_link: form.require_external_link,
         limit:                 form.limit,
+        scrape_limit:          form.limit,
         headless:              true,
         genre:                 form.genre,
       })
