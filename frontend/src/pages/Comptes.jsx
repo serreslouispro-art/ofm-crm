@@ -492,6 +492,13 @@ export default function Comptes() {
                         <option value="homme">Hommes uniquement</option>
                       </select>
                     </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: 10, color: '#444466' }}>Source</span>
+                      <select value={getF(compte.id,'source','following')} onChange={e => setF(compte.id,'source',e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, outline: 'none' }}>
+                        <option value="following">Abonnements</option>
+                        <option value="followers">Abonnés</option>
+                      </select>
+                    </div>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: 2 }}>
                       <input type="checkbox" checked={getF(compte.id,'lien',false)} onChange={e => setF(compte.id,'lien',e.target.checked)} style={{ accentColor: '#7c3aed' }} />
                       <span style={{ fontSize: 11, color: '#666688' }}>Lien externe requis</span>
