@@ -51,6 +51,7 @@ def scrape(
     limit: int = 50,
     scrape_limit: int = 200,
     genre: str = "tous",
+    source: str = "following",
     headless: bool = True,
     on_progress: Optional[Callable[[str], None]] = None,
 ) -> dict:
@@ -100,7 +101,7 @@ def scrape(
 
     # Récupérer les abonnés
     try:
-        followers = cl.user_following(target_id, amount=scrape_limit)
+        followers = cl.user_followers(target_id, amount=scrape_limit) if source == "followers" else cl.user_following(target_id, amount=scrape_limit)
         usernames = list(followers.keys())
         log.info(f"[scraper] {len(usernames)} abonnés collectés")
     except Exception as e:
