@@ -773,6 +773,31 @@ export default function Prospection() {
 
             {selected.size > 0 && (
               <button
+                onClick={async () => {
+                  if (!window.confirm(`Supprimer ${selected.size} profil(s) ?`)) return
+                  await Promise.all(Array.from(selected).map(id =>
+                    fetch(`http://178.104.155.64:5000/modeles/${id}`, { method: 'DELETE' })
+                  ))
+                  setProspects(prev => prev.filter(p => !selected.has(p.id)))
+                  setSelected(new Set())
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '7px 16px', borderRadius: 8, border: 'none',
+                  background: 'rgba(248,113,113,0.15)',
+                  color: '#f87171', fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer',
+                  border: '1px solid rgba(248,113,113,0.3)',
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/>
+                </svg>
+                Supprimer ({selected.size})
+              </button>
+            )}
+            {selected.size > 0 && (
+              <button
                 onClick={() => {
                   // Réinitialise le résultat d'une campagne précédente pour afficher
                   // le formulaire d'envoi (et non l'écran de résultat de la dernière campagne)
