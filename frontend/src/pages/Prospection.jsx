@@ -336,6 +336,7 @@ export default function Prospection() {
     bio_keywords:          [],
     require_external_link: false,
     limit:                 100,
+    genre:                 'femme',
   })
 
   const [scrape,    setScrape]    = useState({ running: false, log: [], result: null })
@@ -413,6 +414,7 @@ export default function Prospection() {
         require_external_link: form.require_external_link,
         limit:                 form.limit,
         headless:              true,
+        genre:                 form.genre,
       })
     } catch (e) {
       setScrape({ running: false, log: [`Erreur : ${e.message}`], result: { error: e.message } })
@@ -556,6 +558,28 @@ export default function Prospection() {
             <TagInput tags={form.bio_keywords} onChange={setF('bio_keywords')} />
           </div>
 
+
+          {/* Genre cible */}
+          <div>
+            <label style={labelStyle}>Genre cible (IA)</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[['tous', 'Tous'], ['femme', 'Femmes'], ['homme', 'Hommes']].map(([val, label]) => (
+                <button key={val} onClick={() => setF('genre')(val)}
+                  disabled={scrape.running}
+                  style={{
+                    flex: 1, padding: '7px 0', borderRadius: 8, border: 'none',
+                    cursor: scrape.running ? 'default' : 'pointer',
+                    background: form.genre === val ? `linear-gradient(135deg, ${C.accent}, #5b21b6)` : C.surf,
+                    color: form.genre === val ? 'white' : C.muted,
+                    fontSize: 12, fontWeight: form.genre === val ? 600 : 400,
+                    border: `1px solid ${form.genre === val ? C.accent : C.border}`,
+                    transition: 'all 0.15s',
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           {/* Lien externe */}
           <label style={{
             display: 'flex', alignItems: 'center', gap: 10,
