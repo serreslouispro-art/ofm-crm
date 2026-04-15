@@ -258,8 +258,7 @@ def scrape_start():
             _scrape_state["log"].append(msg)
 
         try:
-            result = asyncio.run(
-                run_scrape(
+            result = run_scrape(
                     credentials=credentials,
                     target=target,
                     filters=filters,
@@ -270,7 +269,6 @@ def scrape_start():
                     headless=headless,
                     on_progress=log,
                 )
-            )
             _scrape_state["result"] = result
         except Exception as e:
             _scrape_state["result"] = {"error": str(e)}
