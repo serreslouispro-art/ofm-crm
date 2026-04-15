@@ -101,7 +101,7 @@ def scrape(
 
     # Récupérer les abonnés
     try:
-        followers = cl.user_followers(target_id, amount=scrape_limit) if source == "followers" else cl.user_following(target_id, amount=scrape_limit)
+        followers = cl.user_followers(target_id, amount=min(scrape_limit, 200)) if source == "followers" else cl.user_following(target_id, amount=min(scrape_limit, 200))
         usernames = list(followers.keys())
         log.info(f"[scraper] {len(usernames)} abonnés collectés")
     except Exception as e:
