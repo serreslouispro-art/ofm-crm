@@ -337,6 +337,7 @@ export default function Prospection() {
     require_external_link: false,
     limit:                 100,
     genre:                 'femme',
+    source:                'following',
   })
 
   const [scrape,    setScrape]    = useState({ running: false, log: [], result: null })
@@ -559,6 +560,28 @@ export default function Prospection() {
           </div>
 
 
+
+          {/* Source */}
+          <div>
+            <label style={labelStyle}>Source des profils</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[['following', 'Abonnements'], ['followers', 'Abonnés']].map(([val, label]) => (
+                <button key={val} onClick={() => setF('source')(val)}
+                  disabled={scrape.running}
+                  style={{
+                    flex: 1, padding: '7px 0', borderRadius: 8,
+                    cursor: scrape.running ? 'default' : 'pointer',
+                    background: form.source === val ? `linear-gradient(135deg, ${C.accent}, #5b21b6)` : C.surf,
+                    color: form.source === val ? 'white' : C.muted,
+                    fontSize: 12, fontWeight: form.source === val ? 600 : 400,
+                    border: `1px solid ${form.source === val ? C.accent : C.border}`,
+                    transition: 'all 0.15s',
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           {/* Genre cible */}
           <div>
             <label style={labelStyle}>Genre cible (IA)</label>
