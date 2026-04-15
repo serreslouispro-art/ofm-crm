@@ -440,8 +440,7 @@ def campaign_auto():
 
         try:
             log(f"[AUTO] Scraping @{target} avec @{compte['username']}…")
-            result = asyncio.run(
-                run_scrape(
+            result = run_scrape(
                     credentials=credentials,
                     target=target,
                     filters=filters,
@@ -451,7 +450,6 @@ def campaign_auto():
                     headless=True,
                     on_progress=log,
                 )
-            )
             _scrape_state["result"] = result
             _scrape_state["running"] = False
             log(f"[AUTO] Scraping terminé — {result.get('added', 0)} profils ajoutés")

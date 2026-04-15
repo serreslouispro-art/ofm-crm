@@ -2,10 +2,11 @@
 scraper_instagrapi.py — Scraper Instagram via Instagrapi (remplace Playwright)
 Plus stable sur VPS, pas besoin de navigateur headless.
 """
-import os, random, time, logging
+import os, sys, random, time, logging
+sys.path.insert(0, "/root/ofm-crm/backend")
 from typing import Optional, Callable
 from dataclasses import dataclass
-from db import get_connection, init_db
+from database import get_connection, init_db
 import crud
 
 log = logging.getLogger("scraper_instagrapi")
@@ -125,9 +126,9 @@ def scrape(
         try:
             user_info = followers[user_id]
             username = user_info.username
-            followers_count = user_info.follower_count or 0
-            bio = user_info.biography or ""
-            lien = user_info.external_url or ""
+            followers_count = getattr(user_info, "follower_count", None) or getattr(user_info, "followers", None) or 0
+            bio = getattr(user_info, "biography", None) or ""
+            lien = getattr(user_info, "external_url", None) or ""
 
             prefix = f"[{i:>3}/{total}] @{username}"
 
