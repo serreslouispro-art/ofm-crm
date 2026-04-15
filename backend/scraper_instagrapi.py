@@ -154,7 +154,7 @@ def scrape(
             if genre in ("femme", "homme"):
                 from sender import _detect_genre
                 detected = _detect_genre(username, bio, username)
-                if detected != genre and detected != "inconnu":
+                if detected != genre:
                     stats["filtered_out"] += 1
                     log.info(f"{prefix} — filtré genre ({detected})")
                     continue
