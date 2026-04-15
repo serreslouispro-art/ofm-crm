@@ -253,6 +253,7 @@ export default function Comptes() {
         bio_keywords: (getF(compteId, 'keywords', '')).split(',').map(k => k.trim()).filter(Boolean),
         require_external_link: getF(compteId, 'lien', false),
         genre: getF(compteId, 'genre', 'tous'),
+        source: getF(compteId, 'source', 'following'),
       })
       const poll = async () => {
         const s = await getCampaignStatus()
