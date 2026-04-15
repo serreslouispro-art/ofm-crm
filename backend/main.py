@@ -445,6 +445,8 @@ def campaign_auto():
                     account_id=account_id,
                     limit=limit,
                     scrape_limit=scrape_limit,
+                    genre=genre,
+                    source=data.get('source', 'following'),
                     headless=True,
                     on_progress=log,
                 )
