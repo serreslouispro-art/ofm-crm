@@ -418,6 +418,7 @@ export default function Prospection() {
         scrape_limit:          form.limit,
         headless:              true,
         genre:                 form.genre,
+        source:                form.source,
       })
     } catch (e) {
       setScrape({ running: false, log: [`Erreur : ${e.message}`], result: { error: e.message } })
