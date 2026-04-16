@@ -62,7 +62,7 @@ IG_BASE = "https://www.instagram.com"
 COOKIES_FILE = Path(__file__).parent / "ig_session.json"
 
 # Délais aléatoires (secondes) pour imiter un comportement humain
-DELAY_BETWEEN_PROFILES = (2.0, 4.5)   # entre deux visites de profil
+DELAY_BETWEEN_PROFILES = (3.0, 6.0)   # entre deux visites de profil
 DELAY_SCROLL           = (1.5, 2.5)   # entre deux scrolls dans la modale
 SCROLL_STEP_PX         = 700          # pixels par scroll (fallback)
 MAX_EMPTY_SCROLLS      = 8            # arrête si N scrolls consécutifs ne chargent rien

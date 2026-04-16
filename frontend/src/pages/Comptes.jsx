@@ -243,7 +243,7 @@ export default function Comptes() {
       const delai = delais[compteId] || 45
       await startCampaignAuto({
         account_id: compteId, target,
-        scrape_limit: parseInt(getF(compteId, 'scrape_limit', 200)),
+        scrape_limit: parseInt(getF(compteId, 'scrape_limit', 2500)),
         limit: parseInt(getF(compteId, 'limit', 50)),
         dms_per_day: parseInt(getF(compteId, 'dms', 40)),
         delay_session_min: delai,
@@ -479,7 +479,7 @@ export default function Comptes() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <span style={{ fontSize: 10, color: '#444466' }}>Scraper bruts</span>
-                      <input type="number" placeholder="200" value={getF(compte.id,'scrape_limit',200)} onChange={e => setF(compte.id,'scrape_limit',e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, width: 70, outline: 'none' }} />
+                      <input type="number" placeholder="2500" value={getF(compte.id,'scrape_limit',200)} onChange={e => setF(compte.id,'scrape_limit',e.target.value)} style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid #1a1a2e', background: '#12121e', color: '#eeeef8', fontSize: 12, width: 70, outline: 'none' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <span style={{ fontSize: 10, color: '#444466' }}>DMs/jour</span>
